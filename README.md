@@ -29,9 +29,11 @@ The current topology consists of:
 The two paths are:
 
 **Upper path:**
+
 `h1 → s1 → s2 → s4 → h2`
 
 **Lower path:**
+
 `h1 → s1 → s3 → s4 → h2`
 
 Each link is configured with a nominal bandwidth of 10 Mbps in the topology definition.
@@ -42,17 +44,63 @@ Each link is configured with a nominal bandwidth of 10 Mbps in the topology defi
 computer_networks/
 │
 ├── topology/
+│   ├── __init__.py
 │   ├── diamond.py
 │   └── network_graph.py
 │
 ├── baselines/
+│   ├── __init__.py
 │   ├── shortest_path.py
 │   └── ecmp.py
 │
+├── monitoring/
+│   ├── __init__.py
+│   └── queue_monitor.py
+│
+├── routing/
+│   ├── __init__.py
+│   └── queue_aware_routing.py
+│
+├── failure_detection/
+│   ├── __init__.py
+│   └── detector.py
+│
+├── recovery/
+│   ├── __init__.py
+│   └── recovery_manager.py
+│
+├── controller/
+│   ├── __init__.py
+│   └── ryu_app.py
+│
 ├── traffic/
+│   ├── __init__.py
 │   ├── failure_scenarios.py
 │   └── test_mininet_failure.py
 │
+├── experiments/
+│   ├── __init__.py
+│   ├── traffic_generator.py
+│   ├── metrics.py
+│   └── run_experiments.py
+│
+├── common/
+│   ├── __init__.py
+│   ├── config.py
+│   └── models.py
+│
+├── tests/
+│   ├── __init__.py
+│   ├── test_topology.py
+│   ├── test_routing.py
+│   └── test_failure.py
+│
+├── docs/
+│   └── INTEGRATION.md
+│
+├── .gitignore
+├── requirements.txt
+├── Makefile
 └── README.md
 ```
 
@@ -81,8 +129,10 @@ This graph is used by the routing algorithms and failure-simulation modules.
 Implements shortest-path routing using NetworkX.
 
 ```python
+from topology.network_graph import create_network_graph
 from baselines.shortest_path import find_shortest_path
 
+G = create_network_graph()
 path = find_shortest_path(G, "h1", "h2")
 ```
 
@@ -139,6 +189,35 @@ An automated test script for physical Mininet link control.
 
 It checks whether a link can be disabled and restored successfully.
 
+### 4.7 common/models.py
+
+Defines shared data structures used for communication between project modules.
+
+The current data models include:
+
+- `LinkMetrics`: Represents link queue and performance measurements.
+- `FailureEvent`: Represents a detected network failure.
+- `RouteDecision`: Represents a routing decision.
+
+### 4.8 common/config.py
+
+Contains shared network configuration, including host names, switch names, nominal link bandwidth and the two alternative paths.
+
+### 4.9 Other Project Modules
+
+The following modules provide the planned structure for the remaining project components:
+
+- `monitoring/`: Queue monitoring and delay estimation.
+- `routing/`: Queue-aware multipath routing.
+- `failure_detection/`: Proactive link and switch failure detection.
+- `recovery/`: Failure recovery and forwarding-rule updates.
+- `controller/`: Central Ryu SDN controller.
+- `experiments/`: Traffic generation and performance evaluation.
+- `tests/`: Automated tests for the implemented components.
+- `docs/`: Project integration documentation.
+
+These modules are currently placeholders where implementation is still pending.
+
 ## 5. Setup and Dependencies
 
 Install the required packages on Ubuntu:
@@ -146,6 +225,12 @@ Install the required packages on Ubuntu:
 ```bash
 sudo apt update
 sudo apt install mininet openvswitch-switch python3-networkx -y
+```
+
+Install the Python dependencies:
+
+```bash
+python3 -m pip install -r requirements.txt
 ```
 
 Verify Python and Mininet:
@@ -195,43 +280,44 @@ Note: The `bw=10` parameter is only enforced when using a traffic-controlled lin
 
 ## 7. Running the Tests
 
-### Test A: Routing and graph-level failure simulation
-
-Run from the project root:
+Run all Python syntax checks and automated tests from the project root:
 
 ```bash
-python3 - <<'PY'
-from topology.network_graph import create_network_graph
-from baselines.shortest_path import find_shortest_path
-from baselines.ecmp import find_ecmp_paths, select_ecmp_path
-from traffic.failure_scenarios import simulate_link_failure
-
-G = create_network_graph()
-
-print("Shortest path:")
-print(find_shortest_path(G, "h1", "h2"))
-
-paths = find_ecmp_paths(G, "h1", "h2")
-print("ECMP paths:", paths)
-
-print("Selected path:", select_ecmp_path(paths, "flow_A"))
-
-G2, path = simulate_link_failure(
-    G, ("s1", "s2"), "h1", "h2"
-)
-print("Path after link failure:", path)
-PY
+make all
 ```
 
-### Test B: Physical Mininet link failure and recovery
+To run only the automated test suite:
 
-Run:
+```bash
+make test
+```
+
+To run only Python syntax checks:
+
+```bash
+make syntax
+```
+
+The automated test suite currently contains 10 tests covering:
+
+- Network topology nodes and links.
+- Shortest-path routing.
+- ECMP path discovery and deterministic selection.
+- Link-failure simulation and alternate-path selection.
+- Handling of disconnected paths and invalid links.
+- Preservation of the original graph during failure simulation.
+
+### Physical Mininet Link Failure and Recovery
+
+Run separately:
 
 ```bash
 sudo python3 -m traffic.test_mininet_failure
 ```
 
-The script checks the initial link state, disables the link and restores it.
+This test checks whether a Mininet link can be disabled and restored successfully.
+
+Note: The automated pytest suite tests graph-level behavior. The Mininet test checks physical link-state control. Neither test establishes end-to-end OVS packet forwarding or bandwidth enforcement.
 
 ## 8. Current Implementation Scope
 
@@ -244,6 +330,8 @@ The following components are implemented:
 - Graph-level link-failure simulation.
 - Mininet physical link-control function.
 - Automated Mininet link down/up test script.
+- Shared configuration and data models.
+- Automated Python test suite.
 
 The following components require further implementation or integration:
 
@@ -276,6 +364,8 @@ The central SDN controller should eventually coordinate:
 5. Traffic generation and evaluation.
 
 The current routing and failure functions are software-level components. They must be integrated with the SDN controller before they can control actual packet forwarding.
+
+For module responsibilities and shared interfaces, refer to `docs/INTEGRATION.md`.
 
 ## 10. Known Environment Limitation
 
