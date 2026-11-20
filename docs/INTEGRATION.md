@@ -43,6 +43,9 @@ Do not create duplicate network topologies.
 - Exclude failed links from routing decisions.
 - Install updated forwarding rules.
 - Restore recovered paths safely.
+- Implemented in recovery/flow_manager.py and recovery/recovery_manager.py,
+  wired into controller/ryu_app.py; interfaces, settings and the event log
+  format are documented in docs/RECOVERY.md.
 
 ### Member 6: Experiments and Evaluation
 - Generate network traffic.
@@ -62,6 +65,15 @@ and RouteDecision.
 
 Function signatures and module interfaces must be agreed
 upon before final controller integration.
+
+## Running the Integrated Controller
+
+    PYTHONPATH=. osken-manager --observe-links controller.ryu_app
+
+The routing mode is selected with SDN_ROUTING_MODE
+(shortest_path, ecmp, queue_aware, proposed). With SDN_LOG_DIR set, the
+controller writes failure_events.csv and recovery_events.csv there for
+the evaluation. See docs/RECOVERY.md.
 
 ## Environment Limitations
 

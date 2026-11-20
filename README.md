@@ -67,17 +67,21 @@ computer_networks/
 │
 ├── recovery/
 │   ├── __init__.py
+│   ├── flow_manager.py
 │   └── recovery_manager.py
 │
 ├── controller/
 │   ├── __init__.py
 │   ├── queue_monitor.py
+│   ├── route_selector.py
+│   ├── topology_manager.py
 │   └── ryu_app.py
 │
 ├── traffic/
 │   ├── __init__.py
 │   ├── failure_scenarios.py
 │   ├── queue_monitor_demo.py
+│   ├── recovery_demo.py
 │   └── test_mininet_failure.py
 │
 ├── experiments/
@@ -96,11 +100,19 @@ computer_networks/
 │   ├── test_topology.py
 │   ├── test_routing.py
 │   ├── test_failure.py
-│   └── test_queue_monitor.py
+│   ├── test_queue_monitor.py
+│   ├── test_queue_aware_routing.py
+│   ├── test_failure_detector.py
+│   ├── test_flow_manager.py
+│   ├── test_recovery_manager.py
+│   ├── test_route_selector.py
+│   └── test_controller_forwarding.py
 │
 ├── docs/
 │   ├── INTEGRATION.md
-│   └── QUEUE_MONITOR.md
+│   ├── QUEUE_MONITOR.md
+│   ├── ROUTING.md
+│   └── RECOVERY.md
 │
 ├── .gitignore
 ├── requirements.txt
@@ -225,19 +237,37 @@ Live view: `python3 -m controller.queue_monitor --interval 1`.
 Traffic demo: `sudo python3 -m traffic.queue_monitor_demo`.
 Details: `docs/QUEUE_MONITOR.md`. (`monitoring.queue_monitor` re-exports the same module.)
 
-### 4.10 Other Project Modules
+### 4.10 recovery/ and controller/ryu_app.py (Member 5)
 
-The following modules provide the planned structure for the remaining project components:
+`recovery/flow_manager.py` installs, updates and removes the OpenFlow rules of each flow.
+`recovery/recovery_manager.py` listens to the failure detector, reroutes the flows that cross a failed link, and moves them back after the link has been stable again for a few seconds, if that lowers their path cost.
 
-- `routing/`: Queue-aware multipath routing.
-- `failure_detection/`: Proactive link and switch failure detection.
-- `recovery/`: Failure recovery and forwarding-rule updates.
-- `controller/`: Central Ryu SDN controller.
-- `experiments/`: Traffic generation and performance evaluation.
+`controller/ryu_app.py` is the central controller. It learns host locations, selects a path per flow (5-tuple) with the configured routing mode and connects topology discovery, queue monitoring, routing, failure detection and recovery.
+
+```bash
+# terminal 1: controller (routing mode: shortest_path, ecmp, queue_aware or proposed)
+SDN_ROUTING_MODE=proposed PYTHONPATH=. osken-manager --observe-links controller.ryu_app
+
+# terminal 2: topology
+sudo PYTHONPATH=. mn --custom topology/diamond.py --topo diamond \
+    --switch ovs,datapath=user --controller remote,ip=127.0.0.1,port=6653 --link tc
+```
+
+End-to-end demo with link failure, restoration and switch failure:
+
+```bash
+sudo python3 -m traffic.recovery_demo --user-datapath
+```
+
+Details, settings and measurements: `docs/RECOVERY.md`.
+
+### 4.11 Other Project Modules
+
+- `routing/`: Queue-aware multipath routing (Member 3), see `docs/ROUTING.md`.
+- `failure_detection/`: Link and switch failure detection (Member 4).
+- `experiments/`: Traffic generation and performance evaluation (pending).
 - `tests/`: Automated tests for the implemented components.
 - `docs/`: Project integration documentation.
-
-These modules are currently placeholders where implementation is still pending.
 
 ## 5. Setup and Dependencies
 
@@ -319,7 +349,7 @@ To run only Python syntax checks:
 make syntax
 ```
 
-The automated test suite currently contains 10 tests covering:
+The automated test suite covers:
 
 - Network topology nodes and links.
 - Shortest-path routing.
@@ -327,6 +357,9 @@ The automated test suite currently contains 10 tests covering:
 - Link-failure simulation and alternate-path selection.
 - Handling of disconnected paths and invalid links.
 - Preservation of the original graph during failure simulation.
+- Queue monitoring, queue-aware routing and failure detection.
+- Flow rule installation, rerouting after failures and path restoration.
+- The controller's packet handling in every routing mode (with simulated switches).
 
 ### Physical Mininet Link Failure and Recovery
 
@@ -338,7 +371,11 @@ sudo python3 -m traffic.test_mininet_failure
 
 This test checks whether a Mininet link can be disabled and restored successfully.
 
-Note: The automated pytest suite tests graph-level behavior. The Mininet test checks physical link-state control. Neither test establishes end-to-end OVS packet forwarding or bandwidth enforcement.
+Note: The automated pytest suite does not start Mininet. The Mininet test above checks physical link-state control only. End-to-end forwarding and recovery through OVS are checked by:
+
+```bash
+sudo python3 -m traffic.recovery_demo --user-datapath
+```
 
 ## 8. Current Implementation Scope
 
@@ -353,14 +390,14 @@ The following components are implemented:
 - Automated Mininet link down/up test script.
 - Shared configuration and data models.
 - Queue monitoring, queueing-delay and utilization estimation (Member 2).
+- Queue-aware multipath routing (Member 3).
+- Link and switch failure detection (Member 4).
+- Forwarding-rule installation, failure recovery and path restoration (Member 5).
+- Controller integration of all modules, with four routing modes.
 - Automated Python test suite.
 
 The following components require further implementation or integration:
 
-- Queue-aware multipath routing.
-- Proactive failure detection.
-- Automatic forwarding-rule installation.
-- End-to-end traffic recovery.
 - Performance evaluation under different traffic loads.
 
 ## 9. Notes for Team Integration
@@ -384,7 +421,7 @@ The central SDN controller should eventually coordinate:
 4. Recovery and forwarding-rule updates.
 5. Traffic generation and evaluation.
 
-The current routing and failure functions are software-level components. They must be integrated with the SDN controller before they can control actual packet forwarding.
+The controller in `controller/ryu_app.py` coordinates the first four. Traffic generation and evaluation run outside the controller and can read its event logs (`SDN_LOG_DIR`, see `docs/RECOVERY.md`).
 
 For module responsibilities and shared interfaces, refer to `docs/INTEGRATION.md`.
 
@@ -406,3 +443,10 @@ when attempting to configure TCLink bandwidth limits.
 Therefore, actual 10 Mbps traffic shaping and end-to-end OVS packet forwarding have not yet been verified in this environment.
 
 A native Ubuntu installation or a suitable Linux VM may be required for complete traffic-shaping and network-performance experiments.
+
+With the OVS userspace datapath (`datapath=user`), TCP and UDP traffic between the hosts is dropped by the receiver unless checksum offloading is turned off on the hosts (ping is not affected):
+
+```text
+h1 ethtool -K h1-eth0 tx off
+h2 ethtool -K h2-eth0 tx off
+```
