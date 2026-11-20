@@ -71,11 +71,13 @@ computer_networks/
 │
 ├── controller/
 │   ├── __init__.py
+│   ├── queue_monitor.py
 │   └── ryu_app.py
 │
 ├── traffic/
 │   ├── __init__.py
 │   ├── failure_scenarios.py
+│   ├── queue_monitor_demo.py
 │   └── test_mininet_failure.py
 │
 ├── experiments/
@@ -93,10 +95,12 @@ computer_networks/
 │   ├── __init__.py
 │   ├── test_topology.py
 │   ├── test_routing.py
-│   └── test_failure.py
+│   ├── test_failure.py
+│   └── test_queue_monitor.py
 │
 ├── docs/
-│   └── INTEGRATION.md
+│   ├── INTEGRATION.md
+│   └── QUEUE_MONITOR.md
 │
 ├── .gitignore
 ├── requirements.txt
@@ -203,11 +207,28 @@ The current data models include:
 
 Contains shared network configuration, including host names, switch names, nominal link bandwidth and the two alternative paths.
 
-### 4.9 Other Project Modules
+### 4.9 controller/queue_monitor.py (Member 2)
+
+Collects per-link queue backlog, transmitted bytes and drops from Linux `tc`,
+and estimates queueing delay (`8 * backlog / rate`) and link utilization.
+
+```python
+from controller.queue_monitor import QueueMonitor
+
+monitor = QueueMonitor()
+monitor.collect_stats()
+monitor.get_link_delay(1, 2)   # ms on the s1 -> s2 link
+monitor.get_all_stats()        # {(1, 2): {"queue_bytes": ..., "estimated_delay_ms": ..., "utilization": ...}}
+```
+
+Live view: `python3 -m controller.queue_monitor --interval 1`.
+Traffic demo: `sudo python3 -m traffic.queue_monitor_demo`.
+Details: `docs/QUEUE_MONITOR.md`. (`monitoring.queue_monitor` re-exports the same module.)
+
+### 4.10 Other Project Modules
 
 The following modules provide the planned structure for the remaining project components:
 
-- `monitoring/`: Queue monitoring and delay estimation.
 - `routing/`: Queue-aware multipath routing.
 - `failure_detection/`: Proactive link and switch failure detection.
 - `recovery/`: Failure recovery and forwarding-rule updates.
@@ -331,11 +352,11 @@ The following components are implemented:
 - Mininet physical link-control function.
 - Automated Mininet link down/up test script.
 - Shared configuration and data models.
+- Queue monitoring, queueing-delay and utilization estimation (Member 2).
 - Automated Python test suite.
 
 The following components require further implementation or integration:
 
-- Queue monitoring and queue-delay estimation.
 - Queue-aware multipath routing.
 - Proactive failure detection.
 - Automatic forwarding-rule installation.
