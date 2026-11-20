@@ -63,6 +63,7 @@ class FailureDetector:
         self._link_failed: Dict[LinkKey, bool] = {}   # known links only
         self._switch_failed: Dict[int, bool] = {}
         self._port_to_peer: Dict[Tuple[int, int], int] = {}
+        self._port_down: Dict[Tuple[int, int], bool] = {}
         self._listeners: List[Callable[[FailureEvent], None]] = []
         self.event_log: List[FailureEvent] = []
 
@@ -128,6 +129,8 @@ class FailureDetector:
         with self._lock:
             if src_port is not None:
                 self._port_to_peer[(src, src_port)] = dst
+                # LLDP crossed the link from this port, so it is up.
+                self._port_down[(src, src_port)] = False
             self._switch_failed.setdefault(src, False)
             self._switch_failed.setdefault(dst, False)
             known = link_key(src, dst) in self._link_failed
@@ -149,7 +152,21 @@ class FailureDetector:
         peer = self._port_to_peer.get((dpid, port_no))
         if peer is None:
             return None  # host-facing or unknown port
+        with self._lock:
+            self._port_down[(dpid, port_no)] = bool(is_down)
+            # The link is only back when both of its ports are up. OVS
+            # sends an intermediate status (no down flags yet) for the far
+            # end of a link that just failed; that is not a recovery.
+            if not is_down and self._has_down_port(dpid, peer):
+                return None
         return self._set_link(dpid, peer, bool(is_down))
+
+    def _has_down_port(self, a: int, b: int) -> bool:
+        key = link_key(a, b)
+        return any(
+            down and link_key(port[0], self._port_to_peer[port]) == key
+            for port, down in self._port_down.items()
+        )
 
     # ------------------------------------------------------------------
     # Queries (for Member 5 and for evaluation)

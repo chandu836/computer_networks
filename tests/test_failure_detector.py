@@ -44,6 +44,21 @@ def test_recovery_event():
     assert d.get_failed_links() == []
 
 
+def test_link_is_back_only_when_both_ports_are_up():
+    d = make_diamond()
+    d.on_port_status(1, 2, True)
+    # Intermediate status of the far end: no down flag yet.
+    assert d.on_port_status(2, 1, False) is None
+    d.on_port_status(2, 1, True)
+    assert d.get_failed_links() == [(1, 2)]
+    assert len(d.event_log) == 1
+
+    assert d.on_port_status(1, 2, False) is None      # s2 side still down
+    ev = d.on_port_status(2, 1, False)
+    assert ev is not None and not ev.is_failed
+    assert d.get_failed_links() == []
+
+
 def test_lldp_delete_after_port_status_is_duplicate():
     d = make_diamond()
     d.on_port_status(1, 2, True)
