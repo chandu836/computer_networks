@@ -26,6 +26,8 @@ Do not create duplicate network topologies.
 - Collect relevant link statistics.
 - Estimate queueing delay.
 - Provide LinkMetrics objects.
+- Implemented in controller/queue_monitor.py; interface, units and link
+  identifiers are documented in docs/QUEUE_MONITOR.md.
 
 ### Member 3: Queue-Aware Routing
 - Use queue metrics to calculate path costs.
