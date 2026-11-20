@@ -205,15 +205,37 @@ def test_link_map_from_topology_manager_bandwidth_override_and_bad_ports():
     assert link_map[(1, 2)].capacity_bps == 5_000_000
 
 
+
 def test_sync_with_topology_manager():
     monitor = QueueMonitor(reader=FakeReader([TC_JSON]))
-    monitor.sync_with_topology_manager(FakeTopologyManager({}))      # nothing discovered yet
+
+    # The default monitor initially has the configured diamond links.
     assert len(monitor.get_monitored_links()) == 8
-    monitor.sync_with_topology_manager(FakeTopologyManager({(1, 2): 2}))
+
+    # An empty discovered topology must clear the monitored links.
+    monitor.sync_with_topology_manager(FakeTopologyManager({}))
+    assert monitor.get_monitored_links() == {}
+
+    # A discovered link must be added.
+    monitor.sync_with_topology_manager(
+        FakeTopologyManager({(1, 2): 2})
+    )
     assert set(monitor.get_monitored_links()) == {(1, 2)}
+
+    # The monitor must follow the complete discovered diamond.
+    monitor.sync_with_topology_manager(
+        FakeTopologyManager(DISCOVERED_DIAMOND)
+    )
+    assert len(monitor.get_monitored_links()) == 8
+
     tm_monitor = QueueMonitor.from_topology_manager(
-        FakeTopologyManager(DISCOVERED_DIAMOND), reader=FakeReader([TC_JSON]))
-    assert tm_monitor.collect_stats()[(1, 2)]["queue_bytes"] == 12000
+        FakeTopologyManager(DISCOVERED_DIAMOND),
+        reader=FakeReader([TC_JSON]),
+    )
+
+    stats = tm_monitor.collect_stats()
+    assert stats[(1, 2)]["queue_bytes"] == 12000
+
 
 
 def test_real_topology_manager_interface():

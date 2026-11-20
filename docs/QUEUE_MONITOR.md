@@ -72,34 +72,33 @@ Rules the Path Selector can rely on:
 - Delay is per directed link, so path delay = sum over consecutive switch pairs.
 - High utilization with zero backlog is normal (the link is busy but keeping up).
 
-## Using it in the controller (`controller/ryu_app.py`, OS-Ken)
 
-Member 1's controller uses OS-Ken (the maintained Ryu fork), so the green
-thread comes from `os_ken.lib.hub`:
+## Using it in the controller (OS-Ken)
+
+The controller owns the queue-monitor polling green thread.
 
 ```python
 from os_ken.lib import hub
-from controller.queue_monitor import QueueMonitor
 
-# in SDNController.__init__
-self.queue_monitor = QueueMonitor()          # links from common/config.py
-self.queue_thread = hub.spawn(self.queue_monitor.run, 1.0)
+# In SDNController.__init__:
+self.queue_monitor = QueueMonitor.from_topology_manager(
+    self.topology_manager
+)
+self.queue_thread = hub.spawn(self._queue_poll_loop)
 
-# in topology_event_handler, after self.topology_manager.discover_topology()
-self.queue_monitor.sync_with_topology_manager(self.topology_manager)
+def _queue_poll_loop(self):
+    while True:
+        self.queue_monitor.collect_stats()
+        hub.sleep(1.0)
 
-# when routing
-queue_stats = self.queue_monitor.get_all_stats()
+# After topology discovery:
+self.queue_monitor.sync_with_topology_manager(
+    self.topology_manager
+)
 ```
 
-`sync_with_topology_manager` turns the discovered port of each link
-(`TopologyManager.links[(src_dpid, dst_dpid)]`) into the interface
-`s<src>-eth<port>`, so the monitor follows the live topology. Until
-discovery finds links, the map from `common/config.py` is used.
+Do not call QueueMonitor.start() from inside the OS-Ken controller.
 
-Other ways to build the link map: `QueueMonitor.from_net(net)` (running
-Mininet), `QueueMonitor.from_topo(DiamondTopo())`, or
-`monitor.update_link_map({...})`.
 
 ## Queue configuration
 

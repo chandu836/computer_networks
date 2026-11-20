@@ -664,25 +664,41 @@ class QueueMonitor:
     def from_topology_manager(cls, topology_manager, **kwargs) -> "QueueMonitor":
         return cls(link_map=build_link_map_from_topology_manager(topology_manager), **kwargs)
 
+
     def sync_with_topology_manager(self, topology_manager) -> None:
         """
-        Refresh the monitored links after TopologyManager.discover_topology().
-        Keeps the current map if discovery has found no links yet.
+        Synchronize monitored links with the exact currently discovered
+        topology, including an empty topology.
+
+        An empty discovered map means no inter-switch links are currently
+        available. Do not retain the previous map.
         """
-        link_map = build_link_map_from_topology_manager(topology_manager)
-        if link_map:
-            self.update_link_map(link_map)
+        link_map = build_link_map_from_topology_manager(
+            topology_manager
+        )
+
+        self.update_link_map(link_map)
+
+
 
     def update_link_map(self, link_map) -> None:
-        """Replace the monitored links (e.g. after topology discovery)."""
+        """Replace monitored links and discard stale per-link measurements."""
+
         new_links = normalize_link_map(link_map)
+
         with self._lock:
-            self._links = new_links
-            for key in list(self._stats):
-                if key not in new_links:
+            old_links = self._links
+
+            for key, old_link in old_links.items():
+                new_link = new_links.get(key)
+
+                if new_link != old_link:
                     self._stats.pop(key, None)
                     self._previous.pop(key, None)
                     self._smoothed_delay.pop(key, None)
+
+            self._links = new_links
+
 
     def get_monitored_links(self) -> Dict[LinkKey, MonitoredLink]:
         with self._lock:
@@ -690,29 +706,55 @@ class QueueMonitor:
 
     # -- collection ---------------------------------------------------------
 
+
     def collect_stats(self) -> Dict[LinkKey, dict]:
-        """Read tc once, update every monitored link, return queue_stats."""
+        """
+        Read tc once and update statistics for the current topology.
+
+        If the topology changes while tc is being read, discard this
+        collection rather than publishing measurements for stale links.
+        """
+
         with self._lock:
-            links = dict(self._links)
+            links_snapshot = dict(self._links)
 
         now = self._clock()
         wall_now = self._wall_clock()
+
         try:
             by_device = self._reader.read()
             read_error = None
-        except Exception as exc:  # never let monitoring crash the controller
+
+        except Exception as exc:
             LOG.warning("Queue statistics unavailable: %s", exc)
             by_device = {}
             read_error = str(exc)
 
         with self._lock:
-            for key, link in links.items():
+
+            # A topology event may have occurred while tc was executing.
+            if links_snapshot != self._links:
+                return copy.deepcopy(self._stats)
+
+            for key, link in links_snapshot.items():
                 self._stats[key] = self._build_entry(
-                    link, by_device.get(link.interface), now, wall_now, read_error
+                    link,
+                    by_device.get(link.interface),
+                    now,
+                    wall_now,
+                    read_error,
                 )
+
+            # Remove entries that are no longer in the current topology.
+            for key in list(self._stats):
+                if key not in self._links:
+                    self._stats.pop(key, None)
+
             self.last_error = read_error
             self.last_collect_time = wall_now
+
             return copy.deepcopy(self._stats)
+
 
     def _build_entry(self, link: MonitoredLink, qdiscs, now, wall_now,
                      read_error) -> dict:

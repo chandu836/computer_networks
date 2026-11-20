@@ -14,7 +14,7 @@ The network is initially represented using a diamond topology, which provides tw
 - Mininet
 - Open vSwitch (OVS)
 - NetworkX
-- Ryu SDN Controller (for controller integration)
+- OS-Ken SDN Controller
 - Linux Traffic Control (`tc`)
 
 ## 2. Network Topology
