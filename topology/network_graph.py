@@ -1,22 +1,33 @@
 
 import networkx as nx
 
+from common.config import HOSTS, SWITCHES, LINKS
+
 
 def create_network_graph():
+    """
+    Create a NetworkX representation of the Mininet topology.
 
-    G = nx.Graph()
+    The graph is undirected. Each edge stores its configured
+    bandwidth and a default hop-count weight.
 
-    # Add network nodes
-    G.add_nodes_from(["h1", "h2", "s1", "s2", "s3", "s4"])
+    Queue measurements and dynamic routing costs should be
+    added by the corresponding monitoring/routing modules.
+    """
 
-    # Add links between nodes
-    G.add_edges_from([
-        ("h1", "s1"),
-        ("s1", "s2"),
-        ("s2", "s4"),
-        ("s1", "s3"),
-        ("s3", "s4"),
-        ("s4", "h2")
-    ])
+    graph = nx.Graph()
 
-    return G
+    graph.add_nodes_from(HOSTS, node_type="host")
+    graph.add_nodes_from(SWITCHES, node_type="switch")
+
+    for node1, node2, bandwidth_mbps in LINKS:
+        graph.add_edge(
+            node1,
+            node2,
+            bandwidth_mbps=bandwidth_mbps,
+            bandwidth_bps=bandwidth_mbps * 1_000_000,
+            weight=1,
+            is_up=True
+        )
+
+    return graph

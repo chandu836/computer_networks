@@ -1,32 +1,40 @@
 
-import networkx as nx
 import hashlib
+import networkx as nx
 
 
 def find_ecmp_paths(graph, source, destination):
+    """
+    Find all equal-cost shortest paths using hop count.
+
+    Returns:
+        list: All shortest paths.
+        []: If either node is missing or no path exists.
+    """
 
     try:
-        paths = list(
+        return list(
             nx.all_shortest_paths(
                 graph,
                 source=source,
-                target=destination
+                target=destination,
             )
         )
-        return paths
 
-    except nx.NetworkXNoPath:
+    except (nx.NetworkXNoPath, nx.NodeNotFound):
         return []
 
 
 def select_ecmp_path(paths, flow_id):
+    """
+    Select a deterministic path for a flow using SHA-256 hashing.
+    """
 
     if not paths:
         return None
 
-    # Generate a deterministic hash for the flow
     flow_hash = hashlib.sha256(
-        str(flow_id).encode()
+        str(flow_id).encode("utf-8")
     ).hexdigest()
 
     index = int(flow_hash, 16) % len(paths)

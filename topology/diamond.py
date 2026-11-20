@@ -1,35 +1,27 @@
+
 from mininet.topo import Topo
+
+from common.config import HOSTS, SWITCHES, LINKS
 
 
 class DiamondTopo(Topo):
+    """Two-host diamond topology with two alternative paths."""
 
     def build(self):
+        for host in HOSTS:
+            self.addHost(host)
 
-        # Create two hosts
-        h1 = self.addHost('h1')
-        h2 = self.addHost('h2')
+        for switch in SWITCHES:
+            self.addSwitch(switch)
 
-        # Create four switches
-        s1 = self.addSwitch('s1')
-        s2 = self.addSwitch('s2')
-        s3 = self.addSwitch('s3')
-        s4 = self.addSwitch('s4')
-
-       # Connect host h1 to switch s1
-        self.addLink(h1, s1, bw=10)
-
-        # Upper path
-        self.addLink(s1, s2, bw=10)
-        self.addLink(s2, s4, bw=10)
-
-        # Lower path
-        self.addLink(s1, s3, bw=10)
-        self.addLink(s3, s4, bw=10)
-
-        # Connect switch s4 to host h2
-        self.addLink(s4, h2, bw=10)
+        for node1, node2, bandwidth_mbps in LINKS:
+            self.addLink(
+                node1,
+                node2,
+                bw=bandwidth_mbps
+            )
 
 
 topos = {
-    'diamond': lambda: DiamondTopo()
+    "diamond": lambda: DiamondTopo()
 }
