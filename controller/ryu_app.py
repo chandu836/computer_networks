@@ -12,6 +12,7 @@ from os_ken.topology import event
 
 from controller.topology_manager import TopologyManager
 from controller.queue_monitor import QueueMonitor
+from failure_detection.detector import FailureDetector
 
 
 class SDNController(app_manager.OSKenApp):
@@ -30,6 +31,12 @@ class SDNController(app_manager.OSKenApp):
         self.queue_monitor = QueueMonitor.from_topology_manager(
             self.topology_manager
         )
+
+        # Member 4: link and switch failure detection.
+        # Member 5 subscribes with:
+        #     self.failure_detector.register_listener(callback)
+        # where callback receives a common.models.FailureEvent.
+        self.failure_detector = FailureDetector()
 
         # Use OS-Ken's cooperative green-thread scheduler.
         # Do not use QueueMonitor.start() inside the controller.
@@ -115,6 +122,23 @@ class SDNController(app_manager.OSKenApp):
             type(ev).__name__,
         )
 
+        # Member 4: feed the failure detector before anything else.
+        try:
+            if isinstance(ev, event.EventSwitchEnter):
+                self.failure_detector.on_switch_enter(ev.switch.dp.id)
+            elif isinstance(ev, event.EventSwitchLeave):
+                self.failure_detector.on_switch_leave(ev.switch.dp.id)
+            elif isinstance(ev, event.EventLinkAdd):
+                self.failure_detector.on_link_add(
+                    ev.link.src.dpid, ev.link.src.port_no, ev.link.dst.dpid
+                )
+            elif isinstance(ev, event.EventLinkDelete):
+                self.failure_detector.on_link_delete(
+                    ev.link.src.dpid, ev.link.dst.dpid
+                )
+        except Exception:
+            self.logger.exception("Failure detector error")
+
         try:
             self.topology_manager.discover_topology()
 
@@ -135,3 +159,23 @@ class SDNController(app_manager.OSKenApp):
             self.logger.exception(
                 "Failed to synchronize topology state"
             )
+
+    @set_ev_cls(ofp_event.EventOFPPortStatus, MAIN_DISPATCHER)
+    def port_status_handler(self, ev):
+        """Member 4: OpenFlow port-status = fastest link failure signal."""
+
+        msg = ev.msg
+        ofproto = msg.datapath.ofproto
+        port = msg.desc
+
+        is_down = bool(
+            (port.state & ofproto.OFPPS_LINK_DOWN)
+            or (port.config & ofproto.OFPPC_PORT_DOWN)
+        )
+
+        try:
+            self.failure_detector.on_port_status(
+                msg.datapath.id, port.port_no, is_down
+            )
+        except Exception:
+            self.logger.exception("Failure detector error")
