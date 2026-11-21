@@ -1,0 +1,6 @@
+topology,status,hosts,switches,physical_links,switch_links,discovered_switches,discovered_directed_links,monitored_links,connected_host_pairs,total_host_pairs,alternate_host_pairs,details,log_dir,failure_test,failed_link,flows_rerouted,recovery_time_ms
+linear,PASS,3,5,7,4,5,8,8,3,3,0,All validation checks passed,/tmp/scalability_linear__inxxwqx,N/A (no alternate path),,0,
+ring,PASS,3,6,9,6,6,12,12,3,3,3,All validation checks passed,/tmp/scalability_ring_vtukcg7r,PASS,s1-s2,2,2.85
+mesh,PASS,3,6,12,9,6,18,18,3,3,3,All validation checks passed,/tmp/scalability_mesh_ncyyp4f9,PASS,s1-s2,2,3.01
+diamond,PASS,2,4,6,4,4,8,8,1,1,1,All validation checks passed,/tmp/scalability_diamond_2xn4999u,PASS,s1-s2,2,3.05
+large,PASS,4,10,19,15,10,30,30,6,6,6,All validation checks passed,/tmp/scalability_large_v_aqge90,PASS,s1-s2,2,5.26
