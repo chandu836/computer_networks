@@ -97,7 +97,7 @@ DEFAULT_TC_TIMEOUT_S = 2.0
 DEFAULT_EWMA_ALPHA = 0.3
 
 # qdiscs that do not hold egress packets and must be ignored
-_IGNORED_QDISC_KINDS = {"ingress", "clsact"}
+_IGNORED_QDISC_KINDS = {"ingress", "clsact", "noqueue"}
 
 
 # ---------------------------------------------------------------------------

@@ -462,7 +462,7 @@ def main(argv=None):
     parser.add_argument("--log-dir", default=None)
     args = parser.parse_args(argv)
 
-    from mininet.link import TCLink
+    from mininet.link import Link, TCLink
     from mininet.log import setLogLevel
     from mininet.net import Mininet
     from mininet.node import OVSSwitch, RemoteController
@@ -493,12 +493,14 @@ def main(argv=None):
         protocols="OpenFlow13",
         **({"datapath": "user"} if args.user_datapath else {}),
     )
+    use_user_datapath = args.user_datapath
+
     net = Mininet(
-        topo=DiamondTopo(),
+        topo=DiamondTopo(configure_bandwidth=not use_user_datapath),
         switch=switch,
         controller=partial(RemoteController, ip="127.0.0.1",
                            port=args.controller_port),
-        link=TCLink,
+        link=Link if use_user_datapath else TCLink,
         autoSetMacs=True,
     )
 

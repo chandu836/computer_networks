@@ -10,7 +10,7 @@ from common.config import (
 class DiamondTopo(Topo):
     """Two-host diamond topology with two alternative paths."""
 
-    def build(self):
+    def build(self, configure_bandwidth=True):
         for host in CONFIG_HOSTS:
             self.addHost(host)
 
@@ -18,11 +18,14 @@ class DiamondTopo(Topo):
             self.addSwitch(switch)
 
         for node1, node2, bandwidth_mbps in CONFIG_LINKS:
-            self.addLink(
-                node1,
-                node2,
-                bw=bandwidth_mbps
-            )
+            if configure_bandwidth:
+                self.addLink(
+                    node1,
+                    node2,
+                    bw=bandwidth_mbps,
+                )
+            else:
+                self.addLink(node1, node2)
 
 
 topos = {
